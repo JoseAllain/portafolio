@@ -1,10 +1,15 @@
-import { Component } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, OnDestroy } from '@angular/core';
 
 @Component({
   selector:'app-root',
-  templateUrl:'app.component.html'
+  templateUrl:'app.component.html',
+  styleUrls:['app.component.css']
 })
-export class AppComponent {
+export class AppComponent implements AfterViewInit, OnDestroy {
+  private revealObserver?: IntersectionObserver;
+
+  constructor(private readonly hostElement: ElementRef<HTMLElement>) {}
+
   categoriaSeleccionada: string = 'todos';
 
   proyectos = [
@@ -84,6 +89,82 @@ export class AppComponent {
 
   filtrar(categoria: string) {
     this.categoriaSeleccionada = categoria;
+  }
+
+  scrollToSection(sectionId: string, event?: Event) {
+    event?.preventDefault();
+
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const host = this.hostElement.nativeElement;
+    const target = host.querySelector<HTMLElement>(`#${sectionId}`);
+    if (!target) {
+      return;
+    }
+
+    const header = host.querySelector<HTMLElement>('.main-header');
+    const headerOffset = (header?.offsetHeight ?? 0) + 10;
+    const targetTop = target.getBoundingClientRect().top + window.scrollY - headerOffset;
+
+    window.scrollTo({
+      top: Math.max(0, targetTop),
+      behavior: 'smooth'
+    });
+
+    if (window.location.hash !== `#${sectionId}`) {
+      window.history.replaceState(null, '', `#${sectionId}`);
+    }
+  }
+
+  ngAfterViewInit() {
+    const revealElements = this.hostElement.nativeElement.querySelectorAll<HTMLElement>('.scroll-reveal');
+
+    if (!revealElements.length) {
+      return;
+    }
+
+    const reducedMotion = typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reducedMotion || typeof IntersectionObserver === 'undefined') {
+      revealElements.forEach((element) => element.classList.add('is-visible'));
+      return;
+    }
+
+    this.revealObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible');
+            this.revealObserver?.unobserve(entry.target);
+          }
+        });
+      },
+      {
+        threshold: 0.14,
+        rootMargin: '0px 0px -6% 0px'
+      }
+    );
+
+    revealElements.forEach((element) => this.revealObserver?.observe(element));
+  }
+
+  ngOnDestroy() {
+    this.revealObserver?.disconnect();
+  }
+
+  get totalProyectos() {
+    return this.proyectos.length;
+  }
+
+  get proyectosWeb() {
+    return this.proyectos.filter((proyecto) => proyecto.categoria === 'web').length;
+  }
+
+  get proyectosIA() {
+    return this.proyectos.filter((proyecto) => proyecto.categoria === 'ml').length;
   }
 
   get proyectosFiltrados() {
